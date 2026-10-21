@@ -21,9 +21,16 @@ void LD_r16_n16(struct Gameboy *gb,uint16_t *r16){
     *r16 = (msb << 8) | lsb;
 }
 
+void LD_r8_r8(struct Gameboy *gb,uint8_t *r8_1,uint8_t *r8_2){
+    *r8_1 = *r8_2;
+    gb->Register.PC++;
+}
+
+
+//corrigir
 void LD_r16_A(struct Gameboy *gb,uint16_t *r16){
     uint8_t value = gb->Register.a;
-    System_Memory_PUT(&gb->SYS_MEMORY,r16,value);
+    //System_Memory_PUT(&gb->SYS_MEMORY,r16,value);
     gb->Register.PC += 1;
 }
 
@@ -172,28 +179,28 @@ void JR_C_e8(struct Gameboy *gb){
 
 
 
-void LD_HLI_A(struct Gameboy *gb){
-    System_Memory_PUT(&gb->SYS_MEMORY,gb->Register.hl,gb->Register.a);
+void LD_HLI_r8(struct Gameboy *gb, uint8_t *r8){
+    System_Memory_PUT(&gb->SYS_MEMORY,gb->Register.hl,*r8);
     gb->Register.hl++;
     gb->Register.PC += 1;
 }
 
 
-void LD_A_HLI(struct Gameboy *gb){
-    gb->Register.a = System_Memory_Get(&gb->SYS_MEMORY, gb->Register.hl);
+void LD_r8_HLI(struct Gameboy *gb,uint8_t *r8){
+    *r8 = System_Memory_Get(&gb->SYS_MEMORY, gb->Register.hl);
     gb->Register.hl++;
     gb->Register.PC += 1;
 }
 
-void LD_HLD_A(struct Gameboy *gb){
-    System_Memory_PUT(&gb->SYS_MEMORY,gb->Register.hl,gb->Register.a);
+void LD_HLD_r8(struct Gameboy *gb,uint8_t *r8){
+    System_Memory_PUT(&gb->SYS_MEMORY,gb->Register.hl,*r8);
     gb->Register.hl--;
     gb->Register.PC += 1;
 }
 
 
-void LD_A_HLD(struct Gameboy *gb){
-    gb->Register.a = System_Memory_Get(&gb->SYS_MEMORY, gb->Register.hl);
+void LD_r8_HLD(struct Gameboy *gb,uint8_t *r8){
+    *r8 = System_Memory_Get(&gb->SYS_MEMORY, gb->Register.hl);
     gb->Register.hl--;
     gb->Register.PC += 1;
 }
@@ -258,6 +265,60 @@ void DEC_HL(struct Gameboy *gb){
     gb->Register.H = ((value & 0x0F) == 0x0F) ? 1 : 0;
     
     gb->Register.PC++;
+}
+
+void LD_HL_n8(struct Gameboy *gb){
+    uint8_t n8 = System_Memory_Get(&gb->SYS_MEMORY, gb->Register.PC++);
+    System_Memory_PUT(&gb->SYS_MEMORY,gb->Register.hl,n8);
+}
+
+void LD_HL_r8(struct Gameboy *gb,uint8_t *r8){
+    System_Memory_PUT(&gb->SYS_MEMORY,gb->Register.hl,*r8);
+    gb->Register.PC++;
+}
+
+void LD_r8_HL(struct Gameboy *gb,uint8_t *r8){
+    uint8_t value = System_Memory_Get(&gb->SYS_MEMORY, gb->Register.hl);
+    *r8 = value;
+    gb->Register.PC++;
+}
+
+void SCF(struct Gameboy *gb){
+    gb->Register.N = 0;
+    gb->Register.H = 0;
+    gb->Register.C = 1;
+    gb->Register.PC++;
+}
+
+void CCF(struct Gameboy *gb){
+    gb->Register.N = 0;
+    gb->Register.H = 0;
+    gb->Register.C = ~(gb->Register.C);
+    gb->Register.PC++;
+}
+
+void ADD_A_r8(struct Gameboy *gb,uint8_t *r8){
+    uint8_t r8_val = *r8;
+    uint8_t ra_val = gb->Register.a;
+    uint16_t result = (r8_val + ra_val);
+    gb->Register.a = (uint8_t)result;
+    gb->Register.Z = (gb->Register.a == 0) ? 1 : 0;
+    gb->Register.N = 0;
+    gb->Register.H = (((ra_val & 0x0F) + (r8_val & 0x0F)) & 0x10) ? 1 : 0;
+    gb->Register.C = (result > 0xFF)? 1 : 0; 
+    gb->Register.PC ++;
+}
+
+void ADC_A_r8(struct Gameboy *gb,uint8_t *r8){
+    uint8_t r8_val = *r8;
+    uint8_t ra_val = gb->Register.a;
+    uint8_t result = (uint8_t)(r8_val + ra_val + gb->Register.C);
+    gb->Register.a = result;
+    gb->Register.Z = (gb->Register.a == 0) ? 1 : 0;
+    gb->Register.N = 0;
+    gb->Register.H = (((ra_val & 0x0F) + (r8_val & 0x0F) + gb->Register.C) & 0x10) ? 1 : 0;
+    gb->Register.C = (result < r8_val || result < ra_val)? 1 : 0; 
+    gb->Register.PC ++;
 }
 
 
@@ -368,7 +429,7 @@ void CPU_exec(struct Gameboy *gb,uint8_t opcode){
         LD_r16_n16(gb,&gb->Register.hl);
         break;
     case 0x22:
-        LD_HLI_A(gb);
+        LD_HLI_r8(gb,&gb->Register.a);
         break;
     case 0x23:
         INC_r16(gb,&gb->Register.hl);
@@ -392,7 +453,7 @@ void CPU_exec(struct Gameboy *gb,uint8_t opcode){
         ADD_HL_r16(gb,&gb->Register.hl);
         break;
     case 0x2A:
-        LD_A_HLI(gb);
+        LD_r8_HLI(gb,&gb->Register.a);
         break;
     case 0x2B:
         Dec_r16(gb,&gb->Register.hl);
@@ -416,7 +477,7 @@ void CPU_exec(struct Gameboy *gb,uint8_t opcode){
         LD_SP_n16(gb);
         break;
     case 0x32:
-        LD_HLD_A(gb);
+        LD_HLD_r8(gb,&gb->Register.a);
         break;
     case 0x33:
         INC_r16(gb,&gb->Register.SP);
@@ -428,27 +489,353 @@ void CPU_exec(struct Gameboy *gb,uint8_t opcode){
         DEC_HL(gb);
         break;
     case 0x36:
+        LD_HL_n8(gb);
         break;
     case 0x37:
+        SCF(gb);
         break;
     case 0x38:
+        JR_C_e8(gb);
         break;
     case 0x39:
+        ADD_HL_r16(gb,&gb->Register.SP);
         break;
     case 0x3A:
+        LD_r8_HLD(gb,&gb->Register.a);
         break;
     case 0x3B:
+        Dec_r16(gb,&gb->Register.SP);
         break;
     case 0x3C:
+        INC_r8(gb,&gb->Register.a);
         break;
     case 0x3D:
+        Dec_r8(gb,&gb->Register.a);
         break;
     case 0x3E:
+        LD_r8_n8(gb,&gb->Register.a);
         break;
     case 0x3F:
+        CCF(gb);
         break;
     case 0x40:
+        LD_r8_r8(gb,&gb->Register.b,&gb->Register.b);
         break;
+    case 0x41:
+        LD_r8_r8(gb,&gb->Register.b,&gb->Register.c);
+        break;
+    case 0x42:
+        LD_r8_r8(gb,&gb->Register.b,&gb->Register.d);
+        break;
+    case 0x43:
+        LD_r8_r8(gb,&gb->Register.b,&gb->Register.e);
+        break;
+    case 0x44:
+        LD_r8_r8(gb,&gb->Register.b,&gb->Register.h);
+        break;
+    case 0x45:
+        LD_r8_r8(gb,&gb->Register.b,&gb->Register.l);
+        break;
+    case 0x46:
+        LD_r8_HL(gb,&gb->Register.b);
+        break;
+    case 0x47:
+        LD_r8_r8(gb,&gb->Register.b,&gb->Register.a);
+        break;
+    case 0x48:
+        LD_r8_r8(gb,&gb->Register.c,&gb->Register.b);
+        break;
+    case 0x49:
+        LD_r8_r8(gb,&gb->Register.c,&gb->Register.c);
+        break;
+    case 0x4A:
+        LD_r8_r8(gb,&gb->Register.c,&gb->Register.d);
+        break;
+    case 0x4B:
+         LD_r8_r8(gb,&gb->Register.c,&gb->Register.e);
+        break;
+    case 0x4C:
+        LD_r8_r8(gb,&gb->Register.c,&gb->Register.h);
+        break;
+    case 0x4D:
+        LD_r8_r8(gb,&gb->Register.c,&gb->Register.l);
+        break;
+    case 0x4E:
+        LD_r8_HL(gb,&gb->Register.c);
+        break;
+    case 0x4F:
+        LD_r8_r8(gb,&gb->Register.c,&gb->Register.a);
+        break;
+    case 0x50:
+        LD_r8_r8(gb,&gb->Register.d,&gb->Register.b);
+        break;
+    case 0x51:
+    LD_r8_r8(gb,&gb->Register.d,&gb->Register.c);
+        break;
+    case 0x52:
+        LD_r8_r8(gb,&gb->Register.d,&gb->Register.d);
+        break;
+    case 0x53:
+        LD_r8_r8(gb,&gb->Register.d,&gb->Register.e);
+        break;
+    case 0x54:
+        LD_r8_r8(gb,&gb->Register.d,&gb->Register.h);
+        break;
+    case 0x55:
+        LD_r8_r8(gb,&gb->Register.d,&gb->Register.l);
+        break;
+    case 0x56:
+        LD_r8_HL(gb,&gb->Register.d);
+        break;
+    case 0x57:
+        LD_r8_r8(gb,&gb->Register.d,&gb->Register.a);
+        break;
+    case 0x58:
+        LD_r8_r8(gb,&gb->Register.e,&gb->Register.b);
+        break;
+    case 0x59:
+        LD_r8_r8(gb,&gb->Register.e,&gb->Register.c);
+        break;
+    case 0x5A:
+        LD_r8_r8(gb,&gb->Register.e,&gb->Register.d);
+        break;
+    case 0x5B:
+        LD_r8_r8(gb,&gb->Register.e,&gb->Register.e);
+        break;
+    case 0x5C:
+        LD_r8_r8(gb,&gb->Register.e,&gb->Register.h);
+        break;
+    case 0x5D:
+        LD_r8_r8(gb,&gb->Register.e,&gb->Register.l);
+        break;
+    case 0x5E:
+        LD_r8_HL(gb,&gb->Register.e);
+        break;
+    case 0x5F:
+        LD_r8_r8(gb,&gb->Register.e,&gb->Register.l);
+        break;
+    case 0x60:
+        LD_r8_r8(gb,&gb->Register.h,&gb->Register.b);
+        break;
+    case 0x61:
+        LD_r8_r8(gb,&gb->Register.h,&gb->Register.c);
+        break;
+    case 0x62:
+        LD_r8_r8(gb,&gb->Register.h,&gb->Register.d);
+        break;
+    case 0x63:
+        LD_r8_r8(gb,&gb->Register.h,&gb->Register.e);
+        break;
+    case 0x64:
+        LD_r8_r8(gb,&gb->Register.h,&gb->Register.h);
+        break;
+    case 0x65:
+        LD_r8_r8(gb,&gb->Register.h,&gb->Register.l);
+        break;
+    case 0x66:
+        LD_r8_HL(gb,&gb->Register.h);
+        break;
+    case 0x67:
+        LD_r8_r8(gb,&gb->Register.h,&gb->Register.a);
+        break;
+    case 0x68:
+        LD_r8_r8(gb,&gb->Register.l,&gb->Register.b);
+        break;
+    case 0x69:
+        LD_r8_r8(gb,&gb->Register.l,&gb->Register.c);
+        break;
+    case 0x6A:
+        LD_r8_r8(gb,&gb->Register.l,&gb->Register.d);
+        break;
+    case 0x6B:
+        LD_r8_r8(gb,&gb->Register.l,&gb->Register.e);
+        break;
+    case 0x6C:
+        LD_r8_r8(gb,&gb->Register.l,&gb->Register.h);
+        break;
+    case 0x6D:
+        LD_r8_r8(gb,&gb->Register.l,&gb->Register.l);
+        break;
+    case 0x6E:
+        LD_r8_HL(gb,&gb->Register.l);
+        break;
+    case 0x6F:
+        LD_r8_r8(gb,&gb->Register.l,&gb->Register.a);
+        break;
+    case 0x70:
+        LD_HL_r8(gb,&gb->Register.b);
+        break;
+    case 0x71:
+        LD_HL_r8(gb,&gb->Register.c);
+        break;
+    case 0x72:
+        LD_HL_r8(gb,&gb->Register.d);
+        break;
+    case 0x73:
+        LD_HL_r8(gb,&gb->Register.e);
+        break;
+    case 0x74:
+        LD_HL_r8(gb,&gb->Register.h);
+        break;
+    case 0x75:
+        LD_HL_r8(gb,&gb->Register.l);
+        break;
+    case 0x76:
+    // halt
+        break;
+    case 0x77:
+        LD_HL_r8(gb,&gb->Register.a);
+        break;
+    case 0x78:
+        LD_r8_r8(gb,&gb->Register.a,&gb->Register.b);
+        break;
+    case 0x79:
+        LD_r8_r8(gb,&gb->Register.a,&gb->Register.c);
+        break;
+    case 0x7A:
+        LD_r8_r8(gb,&gb->Register.a,&gb->Register.d);
+        break;
+    case 0x7B:
+        LD_r8_r8(gb,&gb->Register.a,&gb->Register.e);
+        break;
+    case 0x7C:
+        LD_r8_r8(gb,&gb->Register.a,&gb->Register.h);
+        break;
+    case 0x7D:
+        LD_r8_r8(gb,&gb->Register.a,&gb->Register.l);
+        break;
+    case 0x7E:
+        LD_r8_HL(gb,&gb->Register.a);
+        break;
+    case 0x7F:
+        LD_r8_r8(gb,&gb->Register.a,&gb->Register.a);
+        break;
+    case 0x80:
+        break;
+    case 0x81:
+        break;
+    case 0x82:
+        break;
+    case 0x83:
+        break;
+    case 0x84:
+        break;
+    case 0x85:
+        break;
+    case 0x86:
+        break;
+    case 0x87:
+        break;
+    case 0x88:
+        break;
+    case 0x89:
+        break;
+    case 0x8A:
+        break;
+    case 0x8B:
+        break;
+    case 0x8C:
+        break;
+    case 0x8D:
+        break;
+    case 0x8E:
+        break;
+    case 0x8F:
+        break;
+    case 0x90:
+        break;
+    case 0x91:
+        break;
+    case 0x92:
+        break;
+    case 0x93:
+        break;
+    case 0x94:
+        break;
+    case 0x95:
+        break;
+    case 0x96:
+        break;
+    case 0x97:
+        break;
+    case 0x98:
+        break;
+    case 0x99:
+        break;
+    case 0x9A:
+        break;
+    case 0x9B:
+        break;
+    case 0x9C:
+        break;
+    case 0x9D:
+        break;
+    case 0x9E:
+        break;
+    case 0x9F:
+        break;
+    case 0xA0:
+        break;
+    case 0xA1:
+        break;
+    case 0xA2:
+        break;
+    case 0xA3:
+        break;
+    case 0xA4:
+        break;
+    case 0xA5:
+        break;
+    case 0xA6:
+        break;
+    case 0xA7:
+        break;
+    case 0xA8:
+        break;
+    case 0xA9:
+        break;
+    case 0xAA:
+        break;
+    case 0xAB:
+        break;
+    case 0xAC:
+        break;
+    case 0xAD:
+        break;
+    case 0xAE:
+        break;
+    case 0xAF:
+        break;
+    case 0xB0:
+        break;
+    case 0xB1:
+        break;
+    case 0xB2:
+        break;
+    case 0xB3:
+        break;
+    case 0xB4:
+        break;
+    case 0xB5:
+        break;
+    case 0xB6:
+        break;
+    case 0xB7:
+        break;
+    case 0xB8:
+        break;
+    case 0xB9:
+        break;
+    case 0xBA:
+        break;
+    case 0xBB:
+        break;
+    case 0xBC:
+        break;
+    case 0xBD:
+        break;
+    
+    
     
     }
 }
