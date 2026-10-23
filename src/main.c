@@ -40,8 +40,24 @@ int main(int argc, char **argv) {
     struct Gameboy gb;
     CPU_Init(&gb);
     CPU_load_Rom(&gb,room_read,size);
+    
+    gb.Register.PC = 0x0100;
+    
+    // Executa um número controlado de instruções usando o PC real do Game Boy
+    for(int i = 0; i < 900; i++) {
+        // 1. Obtém o opcode através do mapa de memória virtual do Game Boy no endereço do PC atual
+        uint8_t opcode = System_Memory_Get(&gb.SYS_MEMORY, gb.Register.PC);
+        
+        printf("| PC: %04X | Opcode: %02X", gb.Register.PC, opcode);
+        
+        // 2. Executa a instrução (deixando a própria função cuidar de incrementar ou alterar o PC)
+        CPU_exec(&gb, opcode);
+    }
 
 
+    for(int l=0x7fff;l<=0xFFFF;l++){
+        printf("%x",System_Memory_Get(&gb.SYS_MEMORY,l));
+    }
 
 SDL_Init(SDL_INIT_VIDEO);
 SDL_Window *window = SDL_CreateWindow(TITLE,
@@ -53,11 +69,7 @@ SDL_Renderer *renderer = SDL_CreateRenderer(window, NULL);
 SDL_Event event;
 struct PPU ppu;
 
-
-
-
-
-
+PPU_Screen_Set(&ppu,0,0,0xff,0x40);
 
 while (true)
 {

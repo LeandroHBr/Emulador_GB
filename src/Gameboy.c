@@ -30,11 +30,10 @@ void LD_r8_r8(struct Gameboy *gb, uint8_t *r8_1, uint8_t *r8_2)
     gb->Register.PC++;
 }
 
-// corrigir
-void LD_r16_A(struct Gameboy *gb, uint16_t *r16)
+void LD_r16_A(struct Gameboy *gb, uint16_t *r16_address)
 {
-    uint8_t value = gb->Register.a;
-    // System_Memory_PUT(&gb->SYS_MEMORY,r16,value);
+    System_Memory_PUT(&gb->SYS_MEMORY, *r16_address, gb->Register.a);
+    
     gb->Register.PC += 1;
 }
 
@@ -725,6 +724,16 @@ void CALL_C_a16(struct Gameboy *gb){
     }
 }
 
+void CALL_a16(struct Gameboy *gb){
+
+    uint16_t return_addr = gb->Register.PC + 3;
+    Stack_Push(gb,return_addr);
+    uint8_t lsb = System_Memory_Get(&gb->SYS_MEMORY,gb->Register.PC + 1);
+    uint8_t msb = System_Memory_Get(&gb->SYS_MEMORY,gb->Register.PC + 2);
+    gb->Register.PC = (msb << 8) | lsb;
+    
+}
+
 void ADD_A_n8(struct Gameboy *gb){
     uint8_t n8 = System_Memory_Get(&gb->SYS_MEMORY, gb->Register.PC++);
     uint8_t ra_val = gb->Register.a;
@@ -827,7 +836,65 @@ void RST_vec(struct Gameboy *gb, uint16_t vec){
 
 
 void LDH_a8_A(struct Gameboy *gb){
+    uint8_t a8 = System_Memory_Get(&gb->SYS_MEMORY, gb->Register.PC++);
+    System_Memory_PUT(&gb->SYS_MEMORY, 0xFF00 | a8, gb->Register.a);
+    gb->Register.PC++;
+}
 
+void LDH_A_a8(struct Gameboy *gb){
+    uint8_t a8 = System_Memory_Get(&gb->SYS_MEMORY,gb->Register.PC++);
+    gb->Register.a = System_Memory_Get(&gb->SYS_MEMORY, 0xFF00 | a8);
+    gb->Register.PC++;
+}
+
+void LDH_C_A(struct Gameboy *gb){
+    System_Memory_PUT(&gb->SYS_MEMORY, 0xFF00 | gb->Register.c, gb->Register.a);
+    gb->Register.PC++;
+}
+
+void LDH_A_C(struct Gameboy *gb){
+    gb->Register.a = System_Memory_Get(&gb->SYS_MEMORY, 0xFF00 | gb->Register.c);
+    gb->Register.PC++;
+}
+
+void LD_HL_SP_e8(struct Gameboy *gb){
+    int8_t e8 = (int8_t)System_Memory_Get(&gb->SYS_MEMORY,gb->Register.PC++);
+    gb->Register.hl = gb->Register.SP + e8;
+    gb->Register.PC++;
+}
+
+void LD_SP_HL(struct Gameboy *gb){
+    gb->Register.SP = gb->Register.hl;
+    gb->Register.PC++;
+}
+
+void ADD_SP_e8(struct Gameboy *gb){
+    int8_t e8 = (int8_t)System_Memory_Get(&gb->SYS_MEMORY,gb->Register.PC++);
+    gb->Register.SP += e8;
+    gb->Register.PC++;
+}
+
+void LD_A_a16(struct Gameboy *gb){
+    uint8_t low = System_Memory_Get(&gb->SYS_MEMORY, gb->Register.PC++);
+    uint8_t high = System_Memory_Get(&gb->SYS_MEMORY, gb->Register.PC++);
+    uint16_t address = (high << 8) | low;
+    
+    gb->Register.a = System_Memory_Get(&gb->SYS_MEMORY, address);
+    gb->Register.PC++;
+}
+
+void LD_a16_A(struct Gameboy *gb){
+    uint8_t low = System_Memory_Get(&gb->SYS_MEMORY, gb->Register.PC++);
+    uint8_t high = System_Memory_Get(&gb->SYS_MEMORY, gb->Register.PC++);
+    uint16_t address = (high << 8) | low;
+    
+    System_Memory_PUT(&gb->SYS_MEMORY, address,gb->Register.a);
+    //gb->Register.PC++;
+}
+
+
+void JP_HL(struct Gameboy *gb){
+    gb->Register.PC = gb->Register.hl;
 }
 
 
@@ -885,6 +952,7 @@ void CPU_exec(struct Gameboy *gb, uint8_t opcode)
         break;
     case 0x10:
         // Stop
+        gb->Register.PC += 2;
         break;
     case 0x11:
         LD_r16_n16(gb, &gb->Register.de);
@@ -1190,6 +1258,7 @@ void CPU_exec(struct Gameboy *gb, uint8_t opcode)
         LD_HL_r8(gb, &gb->Register.l);
         break;
     case 0x76:
+        printf("halttttttttttt");
         // halt
         break;
     case 0x77:
@@ -1445,13 +1514,14 @@ void CPU_exec(struct Gameboy *gb, uint8_t opcode)
         JP_Z_a16(gb);
         break;  
     case 0xCB:
+        printf("prefixxxxxxxxxxx");
         //prefix
         break;  
     case 0xCC:
         CALL_Z_a16(gb);
         break;  
     case 0xCD:
-        //call
+        CALL_a16(gb);
         break;  
     case 0xCE:
         ADC_A_n8(gb);
@@ -1468,9 +1538,6 @@ void CPU_exec(struct Gameboy *gb, uint8_t opcode)
     case 0xD2:
         JP_NC_a16(gb);
         break;  
-    case 0xD3:
-        // sem instrução
-        break; 
     case 0xD4:
         CALL_NC_a16(gb);
         break;
@@ -1488,18 +1555,13 @@ void CPU_exec(struct Gameboy *gb, uint8_t opcode)
         break;
     case 0xD9:
         // RETI
+        printf("RETIIIIIIIIIIIIIIi");
         break;
     case 0xDA:
         JP_C_a16(gb);
         break;
-    case 0xDB:
-        // sem instrução
-        break;
     case 0xDC:
         CALL_C_a16(gb);
-        break;
-    case 0xDD:
-        // call DD
         break;
     case 0xDE:
         SubC_A_n8(gb);
@@ -1508,71 +1570,83 @@ void CPU_exec(struct Gameboy *gb, uint8_t opcode)
         RST_vec(gb,0x18);
         break;
     case 0xE0:
-        
+        LDH_a8_A(gb);
         break;
     case 0xE1:
+        POP_R16(gb,&gb->Register.hl);
         break;
     case 0xE2:
-        break;
-    case 0xE3:
-        break;
-    case 0xE4:
+        LDH_C_A(gb);
         break;
     case 0xE5:
+        PUSH_R16(gb,&gb->Register.hl);
         break; 
     case 0xE6:
+        AND_A_n8(gb);
         break;
     case 0xE7:
+        RST_vec(gb,0x20);
         break;
     case 0xE8:
+        ADD_SP_e8(gb);
         break;
     case 0xE9:
+        JP_HL(gb);
         break;
     case 0xEA:
-        break;
-    case 0xEB:
-        break;
-    case 0xEC:
-        break;
-    case 0xED:
+        LD_a16_A(gb);
         break;
     case 0xEE:
+        XOR_A_n8(gb);
         break;
     case 0xEF:
+        RST_vec(gb,0x28);
         break;
     case 0xF0:
+        LDH_A_a8(gb);
         break;
     case 0xF1:
+        POP_R16(gb,&gb->Register.af);
         break;
     case 0xF2:
+        LDH_A_C(gb);
         break;
     case 0xF3:
-        break;
-    case 0xF4:
+        printf("DIIIIIIIIIIIIIII");
+        //DI
         break;
     case 0xF5:
+        PUSH_R16(gb,&gb->Register.af);
         break;
     case 0xF6:
+        OR_A_n8(gb);
         break;
     case 0xF7:
+        RST_vec(gb,0x30);
         break;
     case 0xF8:
+        LD_HL_SP_e8(gb);
         break;
     case 0xF9:
+        LD_SP_HL(gb);
         break;
     case 0xFA:
+        LD_A_a16(gb);
         break;
     case 0xFB:
-        break;
-    case 0xFC:
-        break;
-    case 0xFD:
+        printf("EIIIIIIIIIIIIII");
+        //ei
         break;
     case 0xFE:
+        CP_A_n8(gb);
         break;
-    case 0xFF
+    case 0xFF:
         RST_vec(gb,0x38);
         break;
-    
+    default:
+    printf("Opcode desconhecido: %02X no PC: %04X\n", opcode, gb->Register.PC);
+    gb->Register.PC += 1; // Ou avança o tamanho estimado para não travar
+    break;
     }
+    
 }
